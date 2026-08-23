@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>לוח יציאות · חיפוש טיסות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#080D1C;
+    --navy-2:#0D1730;
+    --panel:#0B1226;
+    --board:#060B18;
+    --amber:#FFB627;
+    --amber-dim:#B67E12;
+    --ink:#F3F6FF;
+    --muted:#6E7DA3;
+    --line:#1B2645;
+    --green:#3FD68A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--navy);color:var(--ink);font-family:'Rubik',system-ui,sans-serif}
+  body{min-height:100vh;padding:18px 14px 60px;display:flex;justify-content:center}
+  .app{width:100%;max-width:560px}
+
+  /* ---- header / board strip ---- */
+  .marquee{
+    background:var(--board);
+    border:1px solid var(--line);
+    border-radius:16px 16px 0 0;
+    padding:16px 18px;
+    display:flex;align-items:center;gap:12px;
+    box-shadow:0 20px 60px -30px #000;
+  }
+  .beacon{width:11px;height:11px;border-radius:50%;background:var(--amber);
+    box-shadow:0 0 0 0 var(--amber);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,182,39,.5)}70%{box-shadow:0 0 0 9px rgba(255,182,39,0)}100%{box-shadow:0 0 0 0 rgba(255,182,39,0)}}
+  .marquee h1{font-size:15px;font-weight:700;letter-spacing:.2px}
+  .marquee .sub{font-family:'Space Mono',monospace;font-size:11px;color:var(--amber);
+    margin-inline-start:auto;letter-spacing:1px;direction:ltr}
+
+  /* ---- form card ---- */
+  .card{background:var(--panel);border:1px solid var(--line);border-top:0;
+    border-radius:0 0 16px 16px;padding:18px 16px 20px;box-shadow:0 30px 80px -40px #000}
+
+  .field{margin-bottom:12px}
+  .field > label{display:block;font-size:11px;color:var(--muted);
+    margin:0 2px 6px;letter-spacing:.4px;font-weight:500}
+
+  /* route row */
+  .route{display:grid;grid-template-columns:1fr 40px 1fr;gap:8px;align-items:end}
+  .swap{height:46px;border:1px solid var(--line);background:var(--navy-2);
+    color:var(--amber);border-radius:12px;font-size:18px;cursor:pointer;
+    transition:.15s;align-self:end}
+  .swap:hover{border-color:var(--amber);transform:rotate(180deg)}
+  .swap:active{transform:rotate(180deg) scale(.94)}
+
+  /* airport select */
+  .ac{position:relative}
+  .ac-input{width:100%;height:46px;background:var(--navy-2);border:1px solid var(--line);
+    border-radius:12px;color:var(--ink);padding:0 12px;font-size:15px;font-family:inherit;
+    outline:none;transition:.15s}
+  .ac-input:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(255,182,39,.12)}
+  .ac-code{position:absolute;inset-inline-end:12px;top:50%;transform:translateY(-50%);
+    font-family:'Space Mono',monospace;font-size:12px;color:var(--amber);
+    pointer-events:none;direction:ltr}
+  .ac-list{position:absolute;z-index:40;top:52px;inset-inline:0;background:#0B142A;
+    border:1px solid var(--line);border-radius:12px;max-height:240px;overflow:auto;
+    display:none;box-shadow:0 24px 50px -18px #000}
+  .ac-list.open{display:block}
+  .ac-item{padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;
+    border-bottom:1px solid rgba(27,38,69,.5)}
+  .ac-item:last-child{border-bottom:0}
+  .ac-item:hover,.ac-item.hl{background:var(--navy-2)}
+  .ac-item .iata{font-family:'Space Mono',monospace;font-size:12px;color:var(--amber);
+    background:rgba(255,182,39,.08);border-radius:6px;padding:3px 7px;direction:ltr;min-width:44px;text-align:center}
+  .ac-item .nm{font-size:14px}
+  .ac-item .cty{font-size:11px;color:var(--muted)}
+  .ac-empty{padding:14px 12px;color:var(--muted);font-size:13px;text-align:center}
+
+  /* dates + toggle */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  input[type=date]{width:100%;height:46px;background:var(--navy-2);border:1px solid var(--line);
+    border-radius:12px;color:var(--ink);padding:0 12px;font-size:14px;font-family:inherit;
+    outline:none;color-scheme:dark;transition:.15s}
+  input[type=date]:focus{border-color:var(--amber)}
+  input[type=date]:disabled{opacity:.4}
+
+  .segments{display:flex;gap:6px;background:var(--navy-2);border:1px solid var(--line);
+    border-radius:12px;padding:4px}
+  .seg{flex:1;border:0;background:transparent;color:var(--muted);font-family:inherit;
+    font-size:13px;font-weight:600;padding:9px 4px;border-radius:9px;cursor:pointer;transition:.15s}
+  .seg.on{background:var(--amber);color:#241700}
+
+  /* pax + cabin */
+  .stepper{display:flex;align-items:center;justify-content:space-between;
+    height:46px;background:var(--navy-2);border:1px solid var(--line);border-radius:12px;padding:0 6px}
+  .stepper button{width:34px;height:34px;border:0;border-radius:9px;background:#12203f;
+    color:var(--amber);font-size:20px;cursor:pointer;line-height:1}
+  .stepper button:active{transform:scale(.9)}
+  .stepper .val{font-size:15px;font-weight:600;min-width:26px;text-align:center}
+  select{width:100%;height:46px;background:var(--navy-2);border:1px solid var(--line);
+    border-radius:12px;color:var(--ink);padding:0 10px;font-size:14px;font-family:inherit;
+    outline:none;color-scheme:dark}
+  select:focus{border-color:var(--amber)}
+
+  .go{width:100%;height:54px;margin-top:16px;border:0;border-radius:14px;
+    background:linear-gradient(180deg,#FFC94D,#F6A61E);color:#231600;
+    font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;letter-spacing:.3px;
+    box-shadow:0 14px 34px -14px rgba(246,166,30,.7);transition:.15s}
+  .go:hover{filter:brightness(1.05)}
+  .go:active{transform:translateY(1px)}
+  .go:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+
+  /* ---- departure board results ---- */
+  .board{margin-top:20px;background:var(--board);border:1px solid var(--line);
+    border-radius:16px;overflow:hidden;display:none}
+  .board.show{display:block;animation:rise .4s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .board-top{display:flex;align-items:center;gap:10px;padding:12px 16px;
+    border-bottom:1px solid var(--line);font-family:'Space Mono',monospace;
+    font-size:12px;color:var(--amber);direction:ltr;letter-spacing:1px}
+  .board-top .dot{margin-inline-start:auto;color:var(--green)}
+  .row{display:flex;align-items:center;gap:12px;padding:14px 16px;
+    border-bottom:1px solid rgba(27,38,69,.6);cursor:pointer;
+    text-decoration:none;color:inherit;transition:background .15s}
+  .row:last-child{border-bottom:0}
+  .row:hover{background:#0B1428}
+  .row .site{font-weight:700;font-size:15px;flex:1}
+  .row .site small{display:block;color:var(--muted);font-weight:400;font-size:11px;margin-top:2px}
+  .flap{font-family:'Space Mono',monospace;font-size:13px;color:var(--amber);direction:ltr;
+    background:rgba(255,182,39,.06);border:1px solid rgba(255,182,39,.18);
+    border-radius:7px;padding:5px 9px;letter-spacing:1px;white-space:nowrap}
+  .row .open{color:var(--amber);font-size:19px;transform:scaleX(-1)}
+  .hint{text-align:center;color:var(--muted);font-size:11px;padding:12px 16px 14px;line-height:1.6}
+  .err{color:#FF8A8A;font-size:12px;margin-top:8px;text-align:center;display:none}
+  .err.show{display:block}
+  /* candidate date chips */
+  .chips-wrap{padding:4px 12px 10px}
+  .chips-lbl{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);
+    direction:ltr;padding:8px 4px 8px;letter-spacing:1px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-family:'Space Mono',monospace;font-size:12px;direction:ltr;
+    text-decoration:none;color:var(--amber);background:rgba(255,182,39,.06);
+    border:1px solid rgba(255,182,39,.2);border-radius:9px;padding:8px 10px;transition:.15s}
+  .chip:hover{background:rgba(255,182,39,.15);border-color:var(--amber)}
+  /* live price board */
+  .priceboard{border-bottom:1px solid var(--line);padding:14px 16px}
+  .pb-title{font-family:'Space Mono',monospace;font-size:11px;color:var(--amber);
+    direction:ltr;letter-spacing:1px;margin-bottom:10px}
+  .pb-row{display:flex;align-items:center;gap:10px;padding:12px 12px;border:1px solid var(--line);
+    border-radius:11px;margin-bottom:7px;text-decoration:none;color:inherit;transition:.15s}
+  .pb-row:hover{border-color:var(--amber)}
+  .pb-row.best{border-color:var(--green);background:rgba(63,214,138,.07)}
+  .pb-date{font-family:'Space Mono',monospace;font-size:13px;direction:ltr}
+  .pb-tag{font-family:'Rubik';font-size:10px;color:var(--green);margin-inline-start:7px}
+  .pb-price{margin-inline-start:auto;font-weight:700;font-size:17px;color:var(--amber);direction:ltr}
+  .pb-row.best .pb-price{color:var(--green)}
+  .pb-msg{color:var(--muted);font-size:12px;text-align:center;padding:12px 6px;line-height:1.6}
+  a{color:var(--amber)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="marquee">
+    <span class="beacon"></span>
+    <h1>לוח יציאות</h1>
+    <span class="sub">FLIGHT&nbsp;FINDER</span>
+  </div>
+
+  <div class="card">
+    <!-- route -->
+    <div class="field">
+      <label>המסלול</label>
+      <div class="route">
+        <div class="ac" id="ac-from">
+          <input class="ac-input" type="text" placeholder="מאיפה" autocomplete="off" aria-label="שדה מוצא">
+          <span class="ac-code"></span>
+          <div class="ac-list"></div>
+        </div>
+        <button class="swap" id="swap" title="החלף" aria-label="החלף מוצא ויעד">⇄</button>
+        <div class="ac" id="ac-to">
+          <input class="ac-input" type="text" placeholder="לאן" autocomplete="off" aria-label="שדה יעד">
+          <span class="ac-code"></span>
+          <div class="ac-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- date mode -->
+    <div class="field">
+      <div class="segments">
+        <button class="seg on" data-mode="exact">תאריכים מדויקים</button>
+        <button class="seg" data-mode="flex">תאריכים גמישים 🎯</button>
+      </div>
+    </div>
+
+    <!-- trip type -->
+    <div class="field">
+      <div class="segments" role="tablist">
+        <button class="seg on" data-trip="round">הלוך ושוב</button>
+        <button class="seg" data-trip="oneway">הלוך בלבד</button>
+      </div>
+    </div>
+
+    <!-- EXACT dates -->
+    <div class="field" id="exact-dates">
+      <div class="grid2">
+        <div><label>יציאה</label><input type="date" id="depart"></div>
+        <div><label>חזרה</label><input type="date" id="return"></div>
+      </div>
+    </div>
+
+    <!-- FLEX dates -->
+    <div class="field" id="flex-dates" style="display:none">
+      <label>חודש</label>
+      <select id="month" style="margin-bottom:10px"></select>
+      <label>מתי בחודש</label>
+      <div class="segments" style="margin-bottom:10px">
+        <button class="seg" data-part="early">תחילת</button>
+        <button class="seg on" data-part="mid">אמצע</button>
+        <button class="seg" data-part="late">סוף</button>
+        <button class="seg" data-part="whole">כל החודש</button>
+      </div>
+      <label>אורך החופשה (לילות)</label>
+      <div class="stepper">
+        <button id="n-minus" aria-label="פחות לילות">−</button>
+        <span class="val" id="n-val">14</span>
+        <button id="n-plus" aria-label="עוד לילות">+</button>
+      </div>
+    </div>
+
+    <!-- pax + cabin -->
+    <div class="field">
+      <div class="grid2">
+        <div>
+          <label>נוסעים</label>
+          <div class="stepper">
+            <button id="pax-minus" aria-label="פחות נוסעים">−</button>
+            <span class="val" id="pax-val">1</span>
+            <button id="pax-plus" aria-label="עוד נוסעים">+</button>
+          </div>
+        </div>
+        <div>
+          <label>מחלקה</label>
+          <select id="cabin">
+            <option value="economy">תיירים</option>
+            <option value="premiumeconomy">תיירים פלוס</option>
+            <option value="business">עסקים</option>
+            <option value="first">ראשונה</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- sort -->
+    <div class="field">
+      <label>סדר תוצאות לפי</label>
+      <div class="segments">
+        <button class="seg on" data-sort="cheap">הזול ביותר 💰</button>
+        <button class="seg" data-sort="best">הטוב ביותר ⭐</button>
+      </div>
+    </div>
+
+    <button class="go" id="go">חפש בכל האתרים</button>
+    <div class="err" id="err">בחר מוצא, יעד ותאריך יציאה</div>
+  </div>
+
+  <!-- results board -->
+  <div class="board" id="board">
+    <div class="board-top">
+      <span>DEPARTURES</span>
+      <span id="board-route"></span>
+      <span class="dot" id="board-date"></span>
+    </div>
+    <div class="priceboard" id="priceboard" style="display:none">
+      <div class="pb-title">LIVE PRICES · מהזול ליקר</div>
+      <div id="price-list"></div>
+    </div>
+    <div id="rows"></div>
+    <div class="chips-wrap" id="chips-wrap" style="display:none">
+      <div class="chips-lbl">CANDIDATE DATES · לחץ להשוואה</div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="hint">כל שורה פותחת חיפוש חי באתר עם הפרטים שמילאת. השווה מחירים ובחר את הטוב ביותר.</div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   מחירים חיים בתוך האפליקציה:
+   הדבק כאן את כתובת ה-Cloudflare Worker שלך (ראה flight-worker.js).
+   כל עוד זה ריק — האפליקציה עובדת במצב קישורים בלבד.
+   ============================================================ */
+const API_BASE = "/api/flights"; // אותו דומיין ב-Vercel — לא צריך לגעת
+
+/* ---------- airport data ---------- */
+const AIRPORTS = [
+  ["TLV","נתב\"ג · תל אביב","Tel Aviv Israel","ישראל"],
+  ["JFK","ניו יורק (JFK)","New York USA","ארה\"ב"],
+  ["EWR","ניו יורק (ניוארק)","Newark USA","ארה\"ב"],
+  ["LAX","לוס אנג'לס","Los Angeles USA","ארה\"ב"],
+  ["MIA","מיאמי","Miami USA","ארה\"ב"],
+  ["BOS","בוסטון","Boston USA","ארה\"ב"],
+  ["SFO","סן פרנסיסקו","San Francisco USA","ארה\"ב"],
+  ["ORD","שיקגו","Chicago USA","ארה\"ב"],
+  ["LHR","לונדון (הית'רו)","London UK England","בריטניה"],
+  ["LGW","לונדון (גטוויק)","London UK England","בריטניה"],
+  ["STN","לונדון (סטנסטד)","London UK England","בריטניה"],
+  ["EDI","אדינבורו","Edinburgh Scotland UK","בריטניה"],
+  ["CDG","פריז (שארל דה גול)","Paris France","צרפת"],
+  ["ORY","פריז (אורלי)","Paris France","צרפת"],
+  ["AMS","אמסטרדם","Amsterdam Netherlands","הולנד"],
+  ["BCN","ברצלונה","Barcelona Spain","ספרד"],
+  ["MAD","מדריד","Madrid Spain","ספרד"],
+  ["FCO","רומא","Rome Italy","איטליה"],
+  ["MXP","מילאנו","Milan Italy","איטליה"],
+  ["VCE","ונציה","Venice Italy","איטליה"],
+  ["NAP","נאפולי","Naples Italy","איטליה"],
+  ["ATH","אתונה","Athens Greece","יוון"],
+  ["SKG","סלוניקי","Thessaloniki Greece","יוון"],
+  ["LCA","לרנקה","Larnaca Cyprus","קפריסין"],
+  ["BER","ברלין","Berlin Germany","גרמניה"],
+  ["MUC","מינכן","Munich Germany","גרמניה"],
+  ["FRA","פרנקפורט","Frankfurt Germany","גרמניה"],
+  ["VIE","וינה","Vienna Austria","אוסטריה"],
+  ["ZRH","ציריך","Zurich Switzerland","שווייץ"],
+  ["GVA","ג'נבה","Geneva Switzerland","שווייץ"],
+  ["BRU","בריסל","Brussels Belgium","בלגיה"],
+  ["PRG","פראג","Prague Czech","צ'כיה"],
+  ["BUD","בודפשט","Budapest Hungary","הונגריה"],
+  ["WAW","ורשה","Warsaw Poland","פולין"],
+  ["LIS","ליסבון","Lisbon Portugal","פורטוגל"],
+  ["OPO","פורטו","Porto Portugal","פורטוגל"],
+  ["CPH","קופנהגן","Copenhagen Denmark","דנמרק"],
+  ["ARN","שטוקהולם","Stockholm Sweden","שוודיה"],
+  ["OSL","אוסלו","Oslo Norway","נורווגיה"],
+  ["HEL","הלסינקי","Helsinki Finland","פינלנד"],
+  ["DUB","דבלין","Dublin Ireland","אירלנד"],
+  ["MLA","מלטה","Malta","מלטה"],
+  ["SOF","סופיה","Sofia Bulgaria","בולגריה"],
+  ["OTP","בוקרשט","Bucharest Romania","רומניה"],
+  ["IST","איסטנבול","Istanbul Turkey","טורקיה"],
+  ["AYT","אנטליה","Antalya Turkey","טורקיה"],
+  ["TBS","טביליסי","Tbilisi Georgia","גאורגיה"],
+  ["KUT","קוטאיסי","Kutaisi Georgia","גאורגיה"],
+  ["BAK","באקו","Baku Azerbaijan","אזרבייג'ן"],
+  ["DXB","דובאי","Dubai UAE Emirates","איחוד האמירויות"],
+  ["AUH","אבו דאבי","Abu Dhabi UAE Emirates","איחוד האמירויות"],
+  ["DOH","דוחא","Doha Qatar","קטאר"],
+  ["BKK","בנבקוק","Bangkok Thailand","תאילנד"],
+  ["HKT","פוקט","Phuket Thailand","תאילנד"],
+  ["CNX","צ'יאנג מאי","Chiang Mai Thailand","תאילנד"],
+  ["KBV","קראבי","Krabi Thailand","תאילנד"],
+  ["USM","קוסמוי","Koh Samui Thailand","תאילנד"],
+  ["DPS","באלי","Bali Denpasar Indonesia","אינדונזיה"],
+  ["SIN","סינגפור","Singapore","סינגפור"],
+  ["KUL","קואלה לומפור","Kuala Lumpur Malaysia","מלזיה"],
+  ["NRT","טוקיו (נריטה)","Tokyo Japan","יפן"],
+  ["HND","טוקיו (הנדה)","Tokyo Japan","יפן"],
+  ["ICN","סיאול","Seoul Korea","קוריאה"],
+  ["DEL","דלהי","Delhi India","הודו"],
+  ["BOM","מומבאי","Mumbai India","הודו"],
+  ["GOI","גואה","Goa India","הודו"],
+  ["YYZ","טורונטו","Toronto Canada","קנדה"],
+  ["MEX","מקסיקו סיטי","Mexico City","מקסיקו"],
+  ["GRU","סאו פאולו","Sao Paulo Brazil","ברזיל"],
+  ["JNB","יוהנסבורג","Johannesburg South Africa","דרום אפריקה"],
+  ["NBO","ניירובי","Nairobi Kenya","קניה"],
+  ["SYD","סידני","Sydney Australia","אוסטרליה"]
+];
+
+/* ---------- autocomplete component ---------- */
+function makeAC(rootId, initialIata){
+  const root=document.getElementById(rootId);
+  const input=root.querySelector('.ac-input');
+  const code=root.querySelector('.ac-code');
+  const list=root.querySelector('.ac-list');
+  let selected=null, hl=-1, filtered=[];
+
+  function setSel(a){
+    selected=a; code.textContent=a?a[0]:''; input.value=a?a[1]:'';
+    list.classList.remove('open');
+  }
+  function render(items){
+    filtered=items; hl=-1;
+    if(!items.length){list.innerHTML='<div class="ac-empty">לא נמצא שדה תעופה</div>';list.classList.add('open');return;}
+    list.innerHTML=items.map((a,i)=>
+      `<div class="ac-item" data-i="${i}"><span class="iata">${a[0]}</span>`+
+      `<span><span class="nm">${a[1]}</span> <span class="cty">${a[3]}</span></span></div>`).join('');
+    list.classList.add('open');
+    list.querySelectorAll('.ac-item').forEach(el=>{
+      el.addEventListener('mousedown',e=>{e.preventDefault();setSel(filtered[+el.dataset.i]);});
+    });
+  }
+  function search(q){
+    q=q.trim().toLowerCase();
+    if(!q)return AIRPORTS.slice(0,8);
+    return AIRPORTS.filter(a=>a[0].toLowerCase().startsWith(q)||a[1].toLowerCase().includes(q)||a[2].toLowerCase().includes(q)||a[3].toLowerCase().includes(q)).slice(0,10);
+  }
+  input.addEventListener('input',()=>{selected=null;code.textContent='';render(search(input.value));});
+  input.addEventListener('focus',()=>render(search(input.value)));
+  input.addEventListener('blur',()=>setTimeout(()=>{
+    if(!selected){const m=search(input.value);if(m.length&&input.value.trim())setSel(m[0]);else{input.value='';code.textContent='';}}
+    list.classList.remove('open');
+  },120));
+  input.addEventListener('keydown',e=>{
+    if(!list.classList.contains('open'))return;
+    if(e.key==='ArrowDown'){e.preventDefault();hl=Math.min(hl+1,filtered.length-1);mark();}
+    else if(e.key==='ArrowUp'){e.preventDefault();hl=Math.max(hl-1,0);mark();}
+    else if(e.key==='Enter'){e.preventDefault();if(hl>=0)setSel(filtered[hl]);else if(filtered.length)setSel(filtered[0]);}
+    else if(e.key==='Escape')list.classList.remove('open');
+  });
+  function mark(){list.querySelectorAll('.ac-item').forEach((el,i)=>el.classList.toggle('hl',i===hl));
+    const el=list.querySelector('.hl');if(el)el.scrollIntoView({block:'nearest'});}
+
+  if(initialIata){const a=AIRPORTS.find(x=>x[0]===initialIata);if(a)setSel(a);}
+  return {get:()=>selected,set:setSel};
+}
+const from=makeAC('ac-from','TLV');
+const to=makeAC('ac-to',null);
+
+/* swap */
+document.getElementById('swap').addEventListener('click',()=>{
+  const f=from.get(),t=to.get();from.set(t);to.set(f);
+});
+
+/* trip type */
+let trip='round';
+document.querySelectorAll('[data-trip]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-trip]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');trip=b.dataset.trip;
+  document.getElementById('return').disabled=(trip==='oneway');
+}));
+
+/* sort */
+let sort='cheap';
+document.querySelectorAll('[data-sort]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-sort]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');sort=b.dataset.sort;
+}));
+
+/* pax stepper */
+let pax=1;
+const paxVal=document.getElementById('pax-val');
+document.getElementById('pax-plus').addEventListener('click',()=>{pax=Math.min(9,pax+1);paxVal.textContent=pax;});
+document.getElementById('pax-minus').addEventListener('click',()=>{pax=Math.max(1,pax-1);paxVal.textContent=pax;});
+
+/* default dates: +14d depart, +21d return */
+function iso(d){return d.toISOString().slice(0,10);}
+const now=new Date();
+const departEl=document.getElementById('depart'), returnEl=document.getElementById('return');
+departEl.value=iso(new Date(now.getTime()+14*864e5));
+returnEl.value=iso(new Date(now.getTime()+21*864e5));
+departEl.min=iso(now);returnEl.min=iso(now);
+departEl.addEventListener('change',()=>{returnEl.min=departEl.value;if(returnEl.value<departEl.value)returnEl.value=departEl.value;});
+
+/* ---------- flexible: month select, part, nights ---------- */
+const MONTHS_HE=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+const MONTHS_EN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const monthSel=document.getElementById('month');
+(function(){let y=now.getFullYear(),m=now.getMonth();
+  for(let i=0;i<14;i++){const yy=y+Math.floor((m+i)/12),mm=(m+i)%12;
+    const o=document.createElement('option');o.value=`${yy}-${String(mm+1).padStart(2,'0')}`;
+    o.textContent=`${MONTHS_HE[mm]} ${yy}`;monthSel.appendChild(o);}})();
+
+let part='mid';
+document.querySelectorAll('[data-part]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-part]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');part=b.dataset.part;}));
+
+let nights=14;const nVal=document.getElementById('n-val');
+document.getElementById('n-plus').addEventListener('click',()=>{nights=Math.min(45,nights+1);nVal.textContent=nights;});
+document.getElementById('n-minus').addEventListener('click',()=>{nights=Math.max(2,nights-1);nVal.textContent=nights;});
+
+/* date-mode toggle */
+let mode='exact';
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-mode]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');mode=b.dataset.mode;
+  document.getElementById('exact-dates').style.display=(mode==='exact')?'':'none';
+  document.getElementById('flex-dates').style.display=(mode==='flex')?'':'none';
+}));
+
+/* ---------- deep-link builders ---------- */
+const yymmdd=d=>d.slice(2).replace(/-/g,'');
+const cabinKayak={economy:'',premiumeconomy:'/premium',business:'/business',first:'/first'};
+
+function skyExact(O,D,dep,ret,round,pax,cabin,cheap){
+  let u=`https://www.skyscanner.co.il/transport/flights/${O.toLowerCase()}/${D.toLowerCase()}/${yymmdd(dep)}/`;
+  if(round)u+=`${yymmdd(ret)}/`;
+  return u+`?adultsv2=${pax}&cabinclass=${cabin}&rtn=${round?1:0}&sort=${cheap?'price':'best'}`;
+}
+function exactLinks(O,D,dep,ret,round,cabin,pax,cheap){
+  let gq=`Flights from ${O} to ${D} on ${dep}`;if(round)gq+=` returning ${ret}`;
+  const google=`https://www.google.com/travel/flights?q=${encodeURIComponent(gq)}`;
+  const sky=skyExact(O,D,dep,ret,round,pax,cabin,cheap);
+  const kayak=`https://www.kayak.co.il/flights/${O}-${D}/${dep}${round?'/'+ret:''}/${pax}adults${cabinKayak[cabin]}?sort=${cheap?'price_a':'bestflight_a'}`;
+  const momondo=`https://www.momondo.co.il/flight-search/${O}-${D}/${dep}${round?'/'+ret:''}?sort=${cheap?'price_a':'bestflight_a'}`;
+  return [
+    ["Google Flights","סקירה מהירה + גרף מחירים",`${O}→${D}`,google],
+    ["Skyscanner","מנוע ההשוואה הגדול","הכל בעברית",sky],
+    ["Kayak","כולל טיסות המשך חכמות","+פילטרים",kayak],
+    ["Momondo","לרוב מוצא מחירים נמוכים","💸",momondo]
+  ];
+}
+
+/* candidate departure pairs within a month window */
+const fmtShort=d=>`${d.getDate()}.${d.getMonth()+1}`;
+function candidates(y,m,part,nights){
+  const dim=new Date(y,m,0).getDate();
+  let lo,hi,step;
+  if(part==='early'){lo=1;hi=10;step=2;}
+  else if(part==='mid'){lo=9;hi=21;step=2;}
+  else if(part==='late'){lo=19;hi=dim;step=2;}
+  else {lo=1;hi=dim;step=4;}
+  const out=[];
+  for(let d=lo;d<=hi;d+=step){const dep=new Date(y,m-1,d);out.push([dep,new Date(dep.getTime()+nights*864e5)]);}
+  return out.slice(0,8);
+}
+function flexLinks(O,D,y,m,round){
+  let gq=`Flights from ${O} to ${D} in ${MONTHS_EN[m-1]} ${y}`;if(round)gq+=` for ${nights} nights`;
+  return `https://www.google.com/travel/flights?q=${encodeURIComponent(gq)}`;
+}
+
+/* ---------- live prices via Worker ---------- */
+const priceboard=document.getElementById('priceboard');
+const priceList=document.getElementById('price-list');
+function money(v,cur){const s={ILS:'₪',EUR:'€',USD:'$',GBP:'£'}[cur]||(cur+' ');return s+Math.round(v).toLocaleString('he-IL');}
+function priceMsg(t){priceboard.style.display='block';priceList.innerHTML=`<div class="pb-msg">${t}</div>`;}
+function renderPrices(res){
+  priceboard.style.display='block';
+  if(res.error||!res.results||!res.results.length){
+    priceMsg(`לא הוחזרו מחירים חיים למסלול הזה${res.error?` (${res.error})`:''}. בשכבת הבדיקה החינמית הכיסוי מוגבל — נסה מפתח Production, או השתמש בקישורים שלמטה.`);return;}
+  const cur=res.currency||'EUR';
+  priceList.innerHTML=res.results.slice(0,8).map((x,i)=>{
+    let gq=`Flights from ${res.origin} to ${res.destination} on ${x.departureDate}`+(x.returnDate?` returning ${x.returnDate}`:'');
+    const url=`https://www.google.com/travel/flights?q=${encodeURIComponent(gq)}`;
+    const dd=x.departureDate.slice(5).split('-').reverse().join('.');
+    const rr=x.returnDate?' → '+x.returnDate.slice(5).split('-').reverse().join('.'):'';
+    return `<a class="pb-row${i===0?' best':''}" href="${url}" target="_blank" rel="noopener">`+
+      `<span class="pb-date">${dd}${rr}${i===0?'<span class="pb-tag">הזול ביותר</span>':''}</span>`+
+      `<span class="pb-price">${money(x.price,cur)}</span></a>`;}).join('');
+}
+function fetchPrices(f,t,round){
+  priceMsg('סורק מחירים חיים לאורך החודש…');
+  const qs=new URLSearchParams({origin:f[0],destination:t[0],month:monthSel.value,
+    nights:String(nights),oneway:round?'0':'1',adults:String(pax),
+    nonstop:document.querySelector('[data-part]')?'0':'0'}).toString();
+  fetch(`${API_BASE}?${qs}`).then(r=>r.json()).then(renderPrices)
+    .catch(e=>priceMsg(`שגיאה בחיבור לשרת המחירים — בדוק את כתובת ה-API. (${e.message||e})`));
+}
+
+/* ---------- go ---------- */
+const board=document.getElementById('board');
+const rows=document.getElementById('rows');
+const chipsWrap=document.getElementById('chips-wrap');
+const chipsEl=document.getElementById('chips');
+const err=document.getElementById('err');
+
+document.getElementById('go').addEventListener('click',()=>{
+  const f=from.get(),t=to.get(),round=trip==='round',cabin=document.getElementById('cabin').value,cheap=sort==='cheap';
+  err.classList.remove('show');
+  if(!f||!t){err.textContent='בחר מוצא ויעד';err.classList.add('show');return;}
+  if(f[0]===t[0]){err.textContent='המוצא והיעד זהים';err.classList.add('show');return;}
+
+  let L, route=`${f[0]} → ${t[0]}`, dateLbl, primary;
+
+  if(mode==='exact'){
+    const dep=departEl.value,ret=returnEl.value;
+    if(!dep){err.textContent='בחר תאריך יציאה';err.classList.add('show');return;}
+    if(round&&!ret){err.textContent='בחר תאריך חזרה (או עבור להלוך בלבד)';err.classList.add('show');return;}
+    L=exactLinks(f[0],t[0],dep,ret,round,cabin,pax,cheap);
+    const fmt=s=>s.split('-').reverse().join('.');
+    dateLbl=round?`${fmt(dep)}–${fmt(ret)}`:fmt(dep);
+    primary=L[0][3];
+    chipsWrap.style.display='none';
+    priceboard.style.display='none';
+  } else {
+    const [y,m]=monthSel.value.split('-').map(Number);
+    const google=flexLinks(f[0],t[0],y,m,round);
+    const cand=candidates(y,m,part,nights);
+    const mid=cand[Math.floor(cand.length/2)]||cand[0];
+    const dep=iso(mid[0]),ret=iso(mid[1]);
+    const sky=skyExact(f[0],t[0],dep,ret,round,pax,cabin,cheap);
+    const kayak=`https://www.kayak.co.il/flights/${f[0]}-${t[0]}/${dep}${round?'/'+ret:''}/${pax}adults${cabinKayak[cabin]}?sort=${cheap?'price_a':'bestflight_a'}`;
+    const momondo=`https://www.momondo.co.il/flight-search/${f[0]}-${t[0]}/${dep}${round?'/'+ret:''}?sort=${cheap?'price_a':'bestflight_a'}`;
+    L=[
+      ["Google Flights","גרף מחירים לכל החודש — טווח גמיש","📉",google],
+      ["Skyscanner","סביב אמצע הטווח שנבחר","±ימים",sky],
+      ["Kayak","כולל טיסות המשך","+פילטרים",kayak],
+      ["Momondo","לרוב מוצא נמוך","💸",momondo]
+    ];
+    const partHe={early:'תחילת',mid:'אמצע',late:'סוף',whole:'כל'}[part];
+    dateLbl=`${partHe} ${MONTHS_HE[m-1]} · ${round?nights+' לילות':'הלוך'}`;
+    primary=google;
+    chipsEl.innerHTML=cand.map(([d1,d2])=>{
+      const u=skyExact(f[0],t[0],iso(d1),iso(d2),round,pax,cabin,cheap);
+      return `<a class="chip" href="${u}" target="_blank" rel="noopener">${fmtShort(d1)}${round?' → '+fmtShort(d2):''}</a>`;
+    }).join('');
+    chipsWrap.style.display='block';
+    if(API_BASE)fetchPrices(f,t,round); else priceboard.style.display='none';
+  }
+
+  document.getElementById('board-route').textContent=route;
+  document.getElementById('board-date').textContent=dateLbl;
+  rows.innerHTML=L.map(([site,desc,flap,url])=>
+    `<a class="row" href="${url}" target="_blank" rel="noopener">`+
+    `<span class="site">${site}<small>${desc}</small></span>`+
+    `<span class="flap">${flap}</span><span class="open">➜</span></a>`).join('');
+  board.classList.add('show');
+  board.scrollIntoView({behavior:'smooth',block:'start'});
+  if(!(mode==='flex'&&API_BASE))window.open(primary,'_blank','noopener');
+});
+</script>
+</body>
+</html>
